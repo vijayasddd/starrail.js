@@ -78,20 +78,35 @@ async function mergeTranslations() {
             }
         }
 
+        // 以英文为主键重新组织数据
+        const englishGrouped = {};
+
+        for (const [key, langs] of Object.entries(translations)) {
+            // 只处理有英文翻译的条目
+            if (langs.en) {
+                const englishText = langs.en;
+
+                if (!englishGrouped[englishText]) {
+                    englishGrouped[englishText] = {};
+                }
+
+                // 合并所有语言到这个英文条目下
+                Object.assign(englishGrouped[englishText], langs);
+            }
+        }
+
         // 转换为数组格式
         const result = [];
-        for (const [key, langs] of Object.entries(translations)) {
+        for (const [englishText, langs] of Object.entries(englishGrouped)) {
             // 只保留至少有2种语言的条目
             if (Object.keys(langs).length >= 2) {
                 result.push(langs);
             }
         }
 
-        // 按英文字母排序（如果有英文）
+        // 按英文字母排序
         result.sort((a, b) => {
-            const aEn = a.en || a.zhCN || a.zhTW || '';
-            const bEn = b.en || b.zhCN || b.zhTW || '';
-            return aEn.localeCompare(bEn);
+            return a.en.localeCompare(b.en);
         });
 
         // 写入输出文件
