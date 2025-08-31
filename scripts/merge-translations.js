@@ -1,0 +1,130 @@
+const fs = require('fs');
+const path = require('path');
+
+// 语言代码映射
+const languageMap = {
+    'en': 'en',
+    'chs': 'zhCN',
+    'cht': 'zhTW',
+    'jp': 'ja',
+    'kr': 'ko',
+    'de': 'de',
+    'es': 'es',
+    'fr': 'fr',
+    'id': 'id',
+    'pt': 'pt',
+    'ru': 'ru',
+    'th': 'th',
+    'vi': 'vi'
+};
+
+// 检查文本是否包含HTML标签或换行符
+function hasTagsOrNewlines(text) {
+    if (typeof text !== 'string') return false;
+
+    // 检查是否包含HTML标签（如<unbreak>、<color>、<i>、<u>、<RUBY_B#xxx>等）
+    const hasHtmlTags = /<[^>]*>/g.test(text);
+
+    // 检查是否包含换行符
+    const hasNewlines = /\\n|\n/g.test(text);
+    const hasSpecialLines = /{/g.test(text);
+
+    return hasHtmlTags || hasNewlines || hasSpecialLines;
+}
+
+async function mergeTranslations() {
+    const langsDir = path.join(__dirname, '../cache/langs');
+    const outputFile = path.join(__dirname, '../translation-dictionary.json');
+
+    try {
+        // 读取所有语言文件
+        const files = fs.readdirSync(langsDir).filter(file => file.endsWith('.json'));
+        console.log('Found language files:', files);
+
+        const translations = {};
+
+        // 读取每个语言文件
+        for (const file of files) {
+            const langCode = path.basename(file, '.json');
+            const mappedLangCode = languageMap[langCode];
+
+            if (!mappedLangCode) {
+                console.warn(`Unknown language code: ${langCode}`);
+                continue;
+            }
+
+            const filePath = path.join(langsDir, file);
+            const content = fs.readFileSync(filePath, 'utf8');
+
+            try {
+                const data = JSON.parse(content);
+                console.log(`Processing ${file}: ${Object.keys(data).length} entries`);
+
+                // 处理每个翻译条目
+                for (const [key, value] of Object.entries(data)) {
+                    if (!translations[key]) {
+                        translations[key] = {};
+                    }
+
+                    // 直接添加原始值，稍后统一过滤
+                    if (value && value.trim().length > 0 && value !== '{NICKNAME}') {
+                        translations[key][mappedLangCode] = value.trim();
+                    }
+                }
+            } catch (parseError) {
+                console.error(`Error parsing ${file}:`, parseError.message);
+            }
+        }
+
+        // 转换为数组格式，并过滤包含标签或换行符的条目
+        const result = [];
+        for (const [key, langs] of Object.entries(translations)) {
+            // 检查这个翻译条目的所有语言版本是否都不包含标签或换行符
+            let shouldInclude = true;
+
+            for (const [langCode, text] of Object.entries(langs)) {
+                if (hasTagsOrNewlines(text)) {
+                    shouldInclude = false;
+                    break; // 如果任何一种语言包含标签或换行符，就不要这整个翻译条目
+                }
+            }
+
+            // 只保留至少有2种语言且所有语言都不包含标签/换行符的条目
+            if (shouldInclude && Object.keys(langs).length >= 2) {
+                result.push(langs);
+            }
+        }
+
+        // 按英文字母排序（如果有英文）
+        result.sort((a, b) => {
+            const aEn = a.en || a.zhCN || a.zhTW || '';
+            const bEn = b.en || b.zhCN || b.zhTW || '';
+            return aEn.localeCompare(bEn);
+        });
+
+        // 写入输出文件
+        fs.writeFileSync(outputFile, JSON.stringify(result, null, 2), 'utf8');
+
+        console.log(`\n✅ Translation dictionary created successfully!`);
+        console.log(`📁 Output file: ${outputFile}`);
+        console.log(`📊 Total entries: ${result.length}`);
+        console.log(`🌐 Languages: ${Object.values(languageMap).join(', ')}`);
+
+        // 显示前几个条目作为示例
+        console.log('\n📝 Sample entries:');
+        result.slice(0, 3).forEach((entry, index) => {
+            console.log(`${index + 1}.`, JSON.stringify(entry));
+        });
+
+    } catch (error) {
+        console.error('❌ Error:', error.message);
+        process.exit(1);
+    }
+}
+
+// 运行脚本
+if (require.main === module) {
+    mergeTranslations();
+}
+
+module.exports = { mergeTranslations }; 
