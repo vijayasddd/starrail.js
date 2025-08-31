@@ -62,35 +62,27 @@ async function mergeTranslations() {
 
                 // 处理每个翻译条目
                 for (const [key, value] of Object.entries(data)) {
+                    // 跳过包含HTML标签、换行符或特殊字符的内容
+                    if (hasTagsOrNewlines(value) || value === '{NICKNAME}' || !value || value.trim().length === 0) {
+                        continue;
+                    }
+
                     if (!translations[key]) {
                         translations[key] = {};
                     }
 
-                    // 直接添加原始值，稍后统一过滤
-                    if (value && value.trim().length > 0 && value !== '{NICKNAME}') {
-                        translations[key][mappedLangCode] = value.trim();
-                    }
+                    translations[key][mappedLangCode] = value.trim();
                 }
             } catch (parseError) {
                 console.error(`Error parsing ${file}:`, parseError.message);
             }
         }
 
-        // 转换为数组格式，并过滤包含标签或换行符的条目
+        // 转换为数组格式
         const result = [];
         for (const [key, langs] of Object.entries(translations)) {
-            // 检查这个翻译条目的所有语言版本是否都不包含标签或换行符
-            let shouldInclude = true;
-
-            for (const [langCode, text] of Object.entries(langs)) {
-                if (hasTagsOrNewlines(text)) {
-                    shouldInclude = false;
-                    break; // 如果任何一种语言包含标签或换行符，就不要这整个翻译条目
-                }
-            }
-
-            // 只保留至少有2种语言且所有语言都不包含标签/换行符的条目
-            if (shouldInclude && Object.keys(langs).length >= 2) {
+            // 只保留至少有2种语言的条目
+            if (Object.keys(langs).length >= 2) {
                 result.push(langs);
             }
         }
